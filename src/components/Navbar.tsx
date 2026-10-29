@@ -1,232 +1,322 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useCart } from "@/components/cart/CartProvider";
 import { useBusinessProfile } from "@/lib/business-profile";
 
-export default function Navbar() {
-  const [cartOpen, setCartOpen] = useState(false);
+type MenuItem = {
+  label: string;
+  href: string;
+};
 
-  const {
-    items,
-    totalItems,
-    totalPrice,
-    isLoaded,
-  } = useCart();
+const navigation: MenuItem[] = [
+  { label: "Home", href: "/" },
+  { label: "Shop", href: "/shop" },
+  { label: "Designs", href: "/designs" },
+  { label: "Booking", href: "/booking" },
+  { label: "Collections", href: "/#collections" },
+  { label: "About", href: "/#about" },
+  { label: "Contact", href: "/#contact" },
+];
 
-  const { profile } = useBusinessProfile();
+function CartIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-5 w-5"
+    >
+      <path d="M3 4h2l2.2 11a2 2 0 0 0 2 1.6h8.5a2 2 0 0 0 2-1.6L22 8H6" />
+      <circle cx="10" cy="20" r="1" />
+      <circle cx="18" cy="20" r="1" />
+    </svg>
+  );
+}
+
+function BrandName({ name }: { name: string }) {
+  const isDefaultBrand =
+    name.trim().toLowerCase() === "mehedi by meherin";
+
+  if (isDefaultBrand) {
+    return (
+      <span className="flex flex-col justify-center whitespace-nowrap leading-[1.08]">
+        <span className="font-serif text-[20px] font-bold tracking-[-0.035em] text-[#3B283D] transition-colors group-hover:text-[#845168] sm:text-[24px]">
+          Mehedi
+        </span>
+
+        <span className="mt-1 font-serif text-[15px] font-semibold italic tracking-[0.01em] text-[#B47C8A] sm:text-[18px]">
+          By Meherin
+        </span>
+      </span>
+    );
+  }
 
   return (
-    <header className="sticky top-0 z-50 border-b border-[#e9ddd5] bg-[#fffaf6]/95 backdrop-blur-md">
+    <span className="max-w-[135px] font-serif text-[16px] font-bold leading-tight text-[#3B283D] sm:max-w-[220px] sm:text-[21px]">
+      {name}
+    </span>
+  );
+}
 
-      {/* BUSINESS ANNOUNCEMENT */}
-      {profile.announcementEnabled &&
-        profile.announcementText && (
-          <p className="bg-[#693f31] px-4 py-2 text-center text-sm text-white">
-            {profile.announcementText}
-          </p>
-        )}
+export default function Navbar() {
+  const pathname = usePathname();
 
-      {/* RESPONSIVE NAVBAR CONTAINER */}
-      <div className="mx-auto grid max-w-7xl grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-4 px-5 py-5 sm:px-6 md:px-10 lg:grid-cols-[minmax(0,1fr)_auto_auto] lg:gap-x-5 lg:px-10 xl:px-12">
+  const { totalItems } = useCart();
+  const { profile } = useBusinessProfile();
 
-        {/* BRAND LOGO */}
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [currentHash, setCurrentHash] = useState("");
+
+  const businessName =
+    profile.businessName?.trim() || "Mehedi By Meherin";
+
+  const announcement =
+    "announcementEnabled" in profile &&
+    profile.announcementEnabled === true &&
+    "announcementText" in profile &&
+    typeof profile.announcementText === "string"
+      ? profile.announcementText.trim()
+      : "";
+
+  useEffect(() => {
+    const updateHash = () => {
+      setCurrentHash(window.location.hash);
+    };
+
+    updateHash();
+
+    window.addEventListener("hashchange", updateHash);
+
+    return () => {
+      window.removeEventListener("hashchange", updateHash);
+    };
+  }, [pathname]);
+
+  function isActive(href: string) {
+    if (href.startsWith("/#")) {
+      return (
+        pathname === "/" &&
+        currentHash === href.substring(1)
+      );
+    }
+
+    if (href === "/") {
+      return pathname === "/" && !currentHash;
+    }
+
+    return (
+      pathname === href ||
+      pathname.startsWith(`${href}/`)
+    );
+  }
+
+  function handleNavigation(href: string) {
+    setMobileOpen(false);
+
+    if (href.startsWith("/#")) {
+      setCurrentHash(href.substring(1));
+    } else if (href === "/") {
+      setCurrentHash("");
+    }
+  }
+
+  const cartActive =
+    pathname === "/cart" || pathname === "/checkout";
+
+  return (
+    <header className="sticky top-0 z-50 border-b border-[#ECE3E2] bg-[#FFFCFA]/95 text-[#3B2E3B] shadow-[0_5px_24px_rgba(54,37,51,0.06)] backdrop-blur-xl">
+
+      {/* OPTIONAL ANNOUNCEMENT */}
+      {announcement && (
+        <div className="bg-[#3C2D40] px-4 py-2.5 text-center text-xs font-medium tracking-wide text-white">
+          {announcement}
+        </div>
+      )}
+
+      <div className="mx-auto flex min-h-[88px] max-w-[1440px] items-center justify-between gap-3 px-4 sm:min-h-[104px] sm:px-7 xl:px-10">
+
+        {/* LARGER OFFICIAL LOGO AND ELEGANT WORDMARK */}
         <Link
           href="/"
-          className="col-start-1 row-start-1 flex min-w-0 flex-col text-[#44271f]"
+          onClick={() => handleNavigation("/")}
+          aria-label={`${businessName} - Home`}
+          className="group flex min-w-0 shrink items-center gap-2.5 sm:gap-3.5"
         >
-          <span className="block whitespace-normal break-words text-lg font-bold leading-tight tracking-wide sm:text-2xl lg:text-xl xl:text-2xl">
-            {profile.businessName}
+          <span className="relative flex h-[65px] w-[65px] shrink-0 items-center justify-center rounded-full border-2 border-[#E8D6DC] bg-white p-[3px] shadow-[0_7px_22px_rgba(70,38,61,0.12)] transition-all duration-500 group-hover:-rotate-3 group-hover:scale-105 group-hover:border-[#C59DAE] group-hover:shadow-xl sm:h-[80px] sm:w-[80px]">
+
+            <Image
+              src="/mehedi-logo.png"
+              alt={`${businessName} official logo`}
+              width={84}
+              height={84}
+              priority
+              sizes="(max-width: 640px) 65px, 80px"
+              className="h-full w-full rounded-full object-contain"
+            />
+
           </span>
 
-          {profile.showTagline && profile.tagline && (
-            <span className="mt-1 block whitespace-normal break-words text-xs font-normal leading-relaxed tracking-normal text-[#80685b]">
-              {profile.tagline}
-            </span>
-          )}
+          <BrandName name={businessName} />
         </Link>
 
-        {/* NAVIGATION */}
+        {/* DESKTOP NAVIGATION */}
         <nav
           aria-label="Main navigation"
-          className="col-span-2 col-start-1 row-start-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-3 text-xs font-medium text-[#44271f] sm:gap-x-6 sm:text-sm lg:col-span-1 lg:col-start-2 lg:row-start-1 lg:flex-nowrap lg:gap-x-5 xl:gap-x-7"
+          className="hidden items-center gap-0.5 xl:flex"
         >
-          <Link
-            href="/"
-            className="whitespace-nowrap transition hover:text-[#b77b5b]"
-          >
-            Home
-          </Link>
+          {navigation.map((item) => {
+            const active = isActive(item.href);
 
-          <Link
-            href="/shop"
-            className="whitespace-nowrap transition hover:text-[#b77b5b]"
-          >
-            Shop
-          </Link>
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => handleNavigation(item.href)}
+                aria-current={active ? "page" : undefined}
+                className={`group relative rounded-xl px-3.5 py-3.5 text-[14px] transition-all duration-300 2xl:px-4 ${
+                  active
+                    ? "bg-[#F7ECF0] font-extrabold text-[#965C76]"
+                    : "font-semibold text-[#6E5F6C] hover:-translate-y-0.5 hover:bg-[#F7EEF1] hover:text-[#523A4D]"
+                }`}
+              >
+                {item.label}
 
-          <Link
-            href="/designs"
-            className="whitespace-nowrap transition hover:text-[#b77b5b]"
-          >
-            Designs
-          </Link>
-
-          <Link
-            href="/booking"
-            className="whitespace-nowrap transition hover:text-[#b77b5b]"
-          >
-            Booking
-          </Link>
-
-          <Link
-            href="/#collections"
-            className="whitespace-nowrap transition hover:text-[#b77b5b]"
-          >
-            Collections
-          </Link>
-
-          <Link
-            href="/#about"
-            className="whitespace-nowrap transition hover:text-[#b77b5b]"
-          >
-            About
-          </Link>
+                <span
+                  className={`absolute bottom-1.5 left-3.5 right-3.5 h-[3px] rounded-full transition-transform duration-300 2xl:left-4 2xl:right-4 ${
+                    active
+                      ? "scale-x-100 bg-[#AB738A]"
+                      : "scale-x-0 bg-[#AB738A] group-hover:scale-x-100"
+                  }`}
+                />
+              </Link>
+            );
+          })}
         </nav>
 
-        {/* SHOPPING CART */}
-        <div className="relative col-start-2 row-start-1 justify-self-end lg:col-start-3">
+        {/* CART AND MOBILE MENU */}
+        <div className="flex shrink-0 items-center gap-2">
 
-          <button
-            type="button"
-            onClick={() => setCartOpen(!cartOpen)}
-            aria-label="Open shopping cart"
-            aria-expanded={cartOpen}
-            aria-controls="cart-preview"
-            className="relative flex items-center gap-2 whitespace-nowrap rounded-full border border-[#e9ddd5] bg-white px-3 py-3 text-[#44271f] transition hover:bg-[#f4e4dc] sm:px-4"
+          <Link
+            href="/cart"
+            onClick={() => setMobileOpen(false)}
+            aria-label={`Shopping cart with ${totalItems} items`}
+            className={`inline-flex min-h-12 items-center gap-2 rounded-full border px-3 py-2.5 text-[13px] font-bold transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md sm:px-5 ${
+              cartActive
+                ? "border-[#A87587] bg-[#F8EAEE] text-[#8F536F]"
+                : "border-[#E2D5D7] bg-white text-[#49394A] hover:border-[#B99EA8]"
+            }`}
           >
-            <span className="text-xl">
-              🛒
-            </span>
+            <CartIcon />
 
-            <span className="text-sm font-semibold">
+            <span className="hidden sm:inline">
               Cart
             </span>
 
-            <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-[#693f31] px-1 text-xs font-bold text-white">
-              {isLoaded ? totalItems : 0}
+            <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-[#A46B80] px-1.5 text-[11px] font-extrabold text-white">
+              {totalItems}
             </span>
+          </Link>
+
+          <button
+            type="button"
+            aria-label={
+              mobileOpen
+                ? "Close navigation"
+                : "Open navigation"
+            }
+            aria-expanded={mobileOpen}
+            aria-controls="mobile-navigation"
+            onClick={() => setMobileOpen((value) => !value)}
+            className="flex h-12 w-12 items-center justify-center rounded-full border border-[#E2D5D7] bg-white text-[#483748] transition-colors hover:bg-[#F5ECEE] xl:hidden"
+          >
+            {mobileOpen ? (
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                className="h-5 w-5"
+              >
+                <path d="M5 5 19 19M19 5 5 19" />
+              </svg>
+            ) : (
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                className="h-5 w-5"
+              >
+                <path d="M4 7h16M4 12h16M4 17h16" />
+              </svg>
+            )}
           </button>
 
-          {/* CART PREVIEW */}
-          {cartOpen && (
-            <div
-              id="cart-preview"
-              className="absolute right-0 top-16 z-50 w-[min(20rem,calc(100vw-2rem))] rounded-2xl border border-[#eaded5] bg-white p-5 text-[#44271f] shadow-xl"
-            >
-
-              {/* CART HEADER */}
-              <div className="mb-5 flex items-center justify-between">
-                <h3 className="font-serif text-xl font-semibold">
-                  Shopping Cart
-                </h3>
-
-                <button
-                  type="button"
-                  onClick={() => setCartOpen(false)}
-                  aria-label="Close cart"
-                  className="text-xl text-[#80685b] transition hover:text-[#44271f]"
-                >
-                  ×
-                </button>
-              </div>
-
-              {/* CART LOADING */}
-              {!isLoaded ? (
-                <p className="py-5 text-center text-sm text-[#80685b]">
-                  Loading cart...
-                </p>
-              ) : items.length === 0 ? (
-
-                /* EMPTY CART */
-                <div className="py-6 text-center">
-
-                  <p className="mb-3 text-4xl">
-                    🛍️
-                  </p>
-
-                  <p className="font-medium">
-                    Your cart is empty
-                  </p>
-
-                  <p className="mt-2 text-sm text-[#80685b]">
-                    Explore our beautiful henna products.
-                  </p>
-
-                  <Link
-                    href="/shop"
-                    onClick={() => setCartOpen(false)}
-                    className="mt-5 inline-block rounded-full bg-[#693f31] px-6 py-3 text-sm font-medium text-white transition hover:bg-[#4f2c22]"
-                  >
-                    Explore Products
-                  </Link>
-
-                </div>
-              ) : (
-
-                /* CART ITEMS */
-                <>
-                  <div className="max-h-64 space-y-4 overflow-y-auto">
-                    {items.map((item) => (
-                      <div
-                        key={item.id}
-                        className="flex justify-between gap-3 border-b border-[#f0e7e1] pb-3"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <p className="break-words text-sm font-medium">
-                            {item.name}
-                          </p>
-
-                          <p className="mt-1 text-xs text-[#80685b]">
-                            Qty: {item.quantity}
-                          </p>
-                        </div>
-
-                        <p className="shrink-0 text-sm font-semibold">
-                          ৳{(
-                            item.price * item.quantity
-                          ).toFixed(2)}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* CART SUBTOTAL */}
-                  <div className="mt-5 flex justify-between border-t border-[#eaded5] pt-4">
-                    <span className="font-medium">
-                      Subtotal
-                    </span>
-
-                    <span className="font-bold">
-                      ৳{totalPrice.toFixed(2)}
-                    </span>
-                  </div>
-
-                  {/* VIEW FULL CART */}
-                  <Link
-                    href="/cart"
-                    onClick={() => setCartOpen(false)}
-                    className="mt-5 block rounded-full bg-[#693f31] px-5 py-3 text-center text-sm font-semibold text-white transition hover:bg-[#4f2c22]"
-                  >
-                    View Full Cart →
-                  </Link>
-                </>
-              )}
-            </div>
-          )}
         </div>
       </div>
+
+      {/* MOBILE AND TABLET NAVIGATION */}
+      {mobileOpen && (
+        <nav
+          id="mobile-navigation"
+          aria-label="Mobile navigation"
+          className="border-t border-[#EEE5E3] bg-[#FFFCFA] px-4 pb-5 pt-3 xl:hidden"
+        >
+          <div className="mx-auto grid max-w-7xl grid-cols-2 gap-2 sm:grid-cols-3">
+
+            {navigation.map((item) => {
+              const active = isActive(item.href);
+
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => handleNavigation(item.href)}
+                  aria-current={active ? "page" : undefined}
+                  className={`rounded-xl px-4 py-4 text-[15px] transition-all ${
+                    active
+                      ? "bg-[#F4E6E9] font-extrabold text-[#945A75] ring-1 ring-[#E5CCD5]"
+                      : "font-semibold text-[#6D5A6B] hover:bg-[#F7EFF0]"
+                  }`}
+                >
+                  <span className="flex items-center justify-between gap-2">
+                    {item.label}
+
+                    {active && (
+                      <span className="h-2 w-2 rounded-full bg-[#A46B80]" />
+                    )}
+                  </span>
+                </Link>
+              );
+            })}
+
+          </div>
+
+          {/* MOBILE CONTACT SHORTCUT */}
+          <a
+            href="https://wa.me/8801306654666"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mx-auto mt-4 flex max-w-7xl items-center justify-center gap-2 rounded-xl bg-[#3C2D40] px-5 py-3.5 text-sm font-semibold text-white"
+          >
+            Contact With Us
+            <span aria-hidden="true">↗</span>
+          </a>
+        </nav>
+      )}
+
     </header>
   );
 }
