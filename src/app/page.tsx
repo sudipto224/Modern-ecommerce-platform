@@ -12,9 +12,13 @@ import { createClient } from "@/lib/supabase/client";
 type FeaturedProduct = {
   id: string;
   name: string;
+  category: string;
   price: number;
+  stock: number;
   imageUrl: string | null;
 };
+
+type ProductLoadingStatus = "loading" | "ready" | "error";
 
 const CONTACT = {
   phone: "01306654666",
@@ -149,7 +153,13 @@ function SocialIcon({
       >
         <rect x="3" y="3" width="18" height="18" rx="5" />
         <circle cx="12" cy="12" r="4" />
-        <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
+        <circle
+          cx="17.5"
+          cy="6.5"
+          r="1"
+          fill="currentColor"
+          stroke="none"
+        />
       </svg>
     );
   }
@@ -196,6 +206,93 @@ function formatPrice(amount: number) {
   })}`;
 }
 
+function FeaturedProductCard({
+  product,
+}: {
+  product: FeaturedProduct;
+}) {
+  const available = product.stock > 0;
+
+  return (
+    <article className="group flex h-full min-w-0 flex-col overflow-hidden rounded-[25px] border border-[#EADDE1] bg-white shadow-[0_8px_28px_rgba(54,32,51,0.045)] transition-all duration-500 hover:-translate-y-2 hover:border-[#D8B7C4] hover:shadow-[0_24px_55px_rgba(65,41,58,0.14)]">
+      <Link
+        href="/shop"
+        aria-label={`Browse ${product.name} in the shop`}
+        className="relative block aspect-[4/4.5] overflow-hidden bg-[#F4E9EC]"
+      >
+        {product.imageUrl ? (
+          <Image
+            src={product.imageUrl}
+            alt={product.name}
+            fill
+            unoptimized
+            sizes="(max-width: 640px) 90vw, (max-width: 1024px) 45vw, 30vw"
+            className="object-cover transition-transform duration-700 ease-out group-hover:scale-[1.07]"
+          />
+        ) : (
+          <div className="flex h-full flex-col items-center justify-center bg-gradient-to-br from-[#FBF1F2] via-[#F0E3E8] to-[#E9DAE2]">
+            <span
+              aria-hidden="true"
+              className="font-serif text-7xl text-[#B78398]"
+            >
+              ✿
+            </span>
+            <p className="mt-3 px-3 text-center text-xs text-[#866F7D]">
+              Product image coming soon
+            </p>
+          </div>
+        )}
+
+        <div className="absolute left-3 top-3 flex flex-wrap gap-2">
+          <span className="rounded-full border border-white/70 bg-white/95 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-[#785164] shadow-sm backdrop-blur">
+            {product.category || "Henna Collection"}
+          </span>
+        </div>
+
+        <span
+          className={`absolute bottom-3 left-3 rounded-full px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] shadow-sm ${
+            available
+              ? "bg-[#EAF6EF] text-[#28734E]"
+              : "bg-[#3E303E] text-white"
+          }`}
+        >
+          {available ? "Available" : "Sold Out"}
+        </span>
+
+        <span className="absolute bottom-3 right-3 flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-[#433044] shadow-lg transition-all duration-300 group-hover:rotate-45 group-hover:bg-[#4D354D] group-hover:text-white">
+          <Arrow diagonal />
+        </span>
+      </Link>
+
+      <div className="flex flex-1 flex-col p-4 sm:p-5">
+        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#AC7B90]">
+          Mehedi By Meherin
+        </p>
+
+        <Link href="/shop" className="mt-2 block">
+          <h3 className="line-clamp-2 min-h-[52px] font-serif text-lg font-semibold leading-snug text-[#3D2D3D] transition-colors group-hover:text-[#A3657D] sm:text-xl">
+            {product.name}
+          </h3>
+        </Link>
+
+        <div className="mt-auto pt-4">
+          <p className="text-lg font-bold text-[#A76A80] sm:text-xl">
+            {formatPrice(product.price)}
+          </p>
+
+          <Link
+            href="/shop"
+            className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full border border-[#DCC4CF] bg-[#FAF2F5] px-4 py-3 text-xs font-bold text-[#5C3B51] transition-all duration-300 hover:border-[#4A3049] hover:bg-[#4A3049] hover:text-white sm:text-sm"
+          >
+            {available ? "View in Shop" : "Explore Collection"}
+            <Arrow diagonal />
+          </Link>
+        </div>
+      </div>
+    </article>
+  );
+}
+
 export default function HomePage() {
   const { profile } = useBusinessProfile();
 
@@ -208,11 +305,14 @@ export default function HomePage() {
       : "Premium henna and mehndi experiences for your beautiful moments.";
 
   const [products, setProducts] = useState<FeaturedProduct[]>([]);
+  const [productsStatus, setProductsStatus] =
+    useState<ProductLoadingStatus>("loading");
+
   const [activeSlide, setActiveSlide] = useState(0);
   const [sliderPaused, setSliderPaused] = useState(false);
   const [hoverPaused, setHoverPaused] = useState(false);
 
-  // Auto-changing background images.
+  // Automatic hero background slideshow.
   useEffect(() => {
     if (sliderPaused || hoverPaused) return;
 
@@ -237,7 +337,7 @@ export default function HomePage() {
     };
   }, [sliderPaused, hoverPaused]);
 
-  // Published products from Supabase.
+  // Automatically display the newest 6 published products.
   useEffect(() => {
     let active = true;
 
@@ -245,10 +345,23 @@ export default function HomePage() {
       try {
         const { data, error } = await createClient()
           .from("products")
-          .select("id, name, price, image_url")
-          .limit(4);
+          .select(
+            "id, name, category, price, stock, image_url"
+          )
+          .eq("status", "published")
+          .order("created_at", { ascending: false })
+          .limit(6);
 
-        if (!active || error) return;
+        if (!active) return;
+
+        if (error) {
+          console.error(
+            "Featured products loading error:",
+            error.message
+          );
+          setProductsStatus("error");
+          return;
+        }
 
         const result: FeaturedProduct[] = (data ?? [])
           .filter(
@@ -256,12 +369,19 @@ export default function HomePage() {
               typeof item.id === "string" &&
               typeof item.name === "string" &&
               Number.isFinite(Number(item.price)) &&
-              Number(item.price) >= 0
+              Number(item.price) >= 0 &&
+              Number.isFinite(Number(item.stock)) &&
+              Number(item.stock) >= 0
           )
           .map((item) => ({
             id: String(item.id),
             name: String(item.name),
+            category:
+              typeof item.category === "string"
+                ? item.category
+                : "Henna Collection",
             price: Number(item.price),
+            stock: Number(item.stock),
             imageUrl:
               typeof item.image_url === "string" &&
               item.image_url.trim()
@@ -270,8 +390,12 @@ export default function HomePage() {
           }));
 
         setProducts(result);
-      } catch {
-        // Homepage remains functional if products cannot load.
+        setProductsStatus("ready");
+      } catch (error) {
+        if (!active) return;
+
+        console.error("Unable to load featured products:", error);
+        setProductsStatus("error");
       }
     }
 
@@ -301,7 +425,6 @@ export default function HomePage() {
       <Navbar />
 
       <main className="overflow-x-clip bg-[#FCFAF7] text-[#322635]">
-
         <style>{`
           @keyframes mm-reveal {
             from {
@@ -345,7 +468,7 @@ export default function HomePage() {
           }
         `}</style>
 
-        {/* AUTO-CHANGING HERO BACKGROUND */}
+        {/* HERO BACKGROUND SLIDESHOW */}
         <section
           aria-label="Mehedi By Meherin introduction"
           className="relative isolate min-h-[630px] overflow-hidden bg-[#332438] text-white lg:min-h-[660px]"
@@ -377,7 +500,6 @@ export default function HomePage() {
             ))}
           </div>
 
-          {/* Gradient keeps text readable on every photo */}
           <div
             aria-hidden="true"
             className="pointer-events-none absolute inset-0 z-20"
@@ -388,7 +510,6 @@ export default function HomePage() {
           />
 
           <div className="relative z-30 mx-auto flex min-h-[630px] max-w-7xl flex-col justify-between px-5 pb-8 pt-16 sm:px-8 lg:min-h-[660px] lg:px-12 lg:pb-9 lg:pt-20">
-
             <div className="mm-reveal max-w-[630px]">
               <div className="mb-7 inline-flex items-center gap-3 rounded-full border border-white/20 bg-white/10 px-5 py-2.5 backdrop-blur">
                 <span className="h-2 w-2 rounded-full bg-[#E5B9C5]" />
@@ -434,7 +555,7 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* SLIDER CONTROLS */}
+            {/* HERO SLIDER CONTROLS */}
             <div className="mt-12 flex flex-wrap items-end justify-between gap-5 border-t border-white/20 pt-6">
               <div>
                 <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.23em] text-white/75">
@@ -490,7 +611,9 @@ export default function HomePage() {
 
                 <button
                   type="button"
-                  onClick={() => setSliderPaused((paused) => !paused)}
+                  onClick={() =>
+                    setSliderPaused((paused) => !paused)
+                  }
                   aria-label={
                     sliderPaused
                       ? "Play automatic slideshow"
@@ -526,7 +649,10 @@ export default function HomePage() {
                 description: "Request a booking for your occasion.",
               },
             ].map((item) => (
-              <div key={item.number} className="flex items-start gap-4 py-7 sm:px-6">
+              <div
+                key={item.number}
+                className="flex items-start gap-4 py-7 sm:px-6"
+              >
                 <span className="font-serif text-2xl text-[#AD7986]">
                   {item.number}
                 </span>
@@ -657,73 +783,121 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* LIVE SUPABASE PRODUCTS */}
-        {products.length > 0 && (
-          <section className="border-y border-[#E9E1DC] bg-[#F4EFEC] py-20 lg:py-24">
-            <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-12">
-
-              <div className="mb-10 flex flex-wrap items-end justify-between gap-5">
-                <div>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-[#AD7986]">
-                    SHOP THE EDIT
+        {/* FEATURED PRODUCTS — SUPABASE */}
+        <section
+          id="featured-products"
+          aria-labelledby="featured-products-title"
+          className="scroll-mt-32 border-y border-[#E9DEE3] bg-gradient-to-b from-[#F8F1F3] via-[#FCF8F8] to-[#F4EDF1] py-20 lg:py-24"
+        >
+          <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-12">
+            <div className="mb-11 flex flex-wrap items-end justify-between gap-6">
+              <div>
+                <div className="mb-4 inline-flex items-center gap-3">
+                  <span className="h-px w-10 bg-[#B47C91]" />
+                  <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-[#A56B82]">
+                    Discover the Collection
                   </p>
-
-                  <h2 className="mt-3 font-serif text-4xl sm:text-5xl">
-                    Selected for you.
-                  </h2>
                 </div>
+
+                <h2
+                  id="featured-products-title"
+                  className="font-serif text-[clamp(2.3rem,4.5vw,4.3rem)] leading-tight tracking-[-0.045em] text-[#3C2A3E]"
+                >
+                  Featured{" "}
+                  <span className="italic text-[#AC728B]">
+                    Products.
+                  </span>
+                </h2>
+
+                <p className="mt-4 max-w-xl text-sm leading-7 text-[#81717D] sm:text-base">
+                  Beautifully chosen henna essentials for
+                  memorable moments. Explore our latest collection.
+                </p>
+              </div>
+
+              <Link
+                href="/shop"
+                className="group inline-flex min-h-12 items-center justify-center gap-3 rounded-full border border-[#D5B9C8] bg-white px-6 py-3.5 text-sm font-bold text-[#52394D] shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-[#51344D] hover:bg-[#51344D] hover:text-white hover:shadow-lg"
+              >
+                Browse More Products
+                <span className="transition-transform duration-300 group-hover:translate-x-1 group-hover:-translate-y-1">
+                  <Arrow diagonal />
+                </span>
+              </Link>
+            </div>
+
+            {productsStatus === "loading" ? (
+              <div
+                className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3"
+                aria-label="Loading featured products"
+              >
+                {Array.from({ length: 3 }).map((_, index) => (
+                  <div
+                    key={index}
+                    className="animate-pulse overflow-hidden rounded-[25px] border border-[#E9DEE3] bg-white"
+                  >
+                    <div className="aspect-[4/4.5] bg-[#EEE3E8]" />
+                    <div className="space-y-4 p-5">
+                      <div className="h-3 w-24 rounded bg-[#EEE3E8]" />
+                      <div className="h-5 w-4/5 rounded bg-[#EEE3E8]" />
+                      <div className="h-5 w-1/3 rounded bg-[#EEE3E8]" />
+                      <div className="h-11 rounded-full bg-[#EEE3E8]" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : products.length > 0 ? (
+              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 lg:gap-7">
+                {products.map((product) => (
+                  <FeaturedProductCard
+                    key={product.id}
+                    product={product}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-[28px] border border-[#E7D9E1] bg-white px-6 py-16 text-center shadow-sm">
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#F7EAF0] font-serif text-4xl text-[#AC728B]">
+                  ✿
+                </div>
+
+                <h3 className="mt-5 font-serif text-3xl text-[#433044]">
+                  Something beautiful is coming.
+                </h3>
+
+                <p className="mx-auto mt-3 max-w-md text-sm leading-7 text-[#84717E]">
+                  {productsStatus === "error"
+                    ? "Our featured collection is temporarily unavailable. Please explore our shop."
+                    : "Our featured collection is being prepared. Visit our shop to explore available products."}
+                </p>
 
                 <Link
                   href="/shop"
-                  className="inline-flex items-center gap-2 text-sm font-semibold text-[#4F3A4D] hover:underline"
+                  className="mt-7 inline-flex items-center gap-3 rounded-full bg-[#50364D] px-7 py-3.5 text-sm font-semibold text-white transition hover:bg-[#76536C]"
                 >
-                  All products
+                  Browse More Products
                   <Arrow diagonal />
                 </Link>
               </div>
+            )}
 
-              <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 lg:gap-6">
-                {products.map((product) => (
-                  <Link
-                    href="/shop"
-                    key={product.id}
-                    className="group min-w-0"
-                  >
-                    <div className="relative aspect-[4/4.6] overflow-hidden rounded-[22px] bg-white shadow-sm transition duration-300 group-hover:-translate-y-2 group-hover:shadow-xl">
+            {products.length > 0 && (
+              <div className="mt-11 flex flex-col items-center gap-4 text-center">
+                <p className="text-xs text-[#947F8C]">
+                  Discover more beautiful finds from our collection.
+                </p>
 
-                      {product.imageUrl ? (
-                        <Image
-                          src={product.imageUrl}
-                          alt={product.name}
-                          fill
-                          unoptimized
-                          sizes="(max-width: 768px) 50vw, 25vw"
-                          className="object-cover transition-transform duration-500 group-hover:scale-105"
-                        />
-                      ) : (
-                        <div className="flex h-full items-center justify-center text-5xl text-[#B48797]">
-                          ✿
-                        </div>
-                      )}
-
-                      <span className="absolute bottom-3 right-3 flex h-10 w-10 items-center justify-center rounded-full bg-white text-[#392B3C] shadow-sm transition group-hover:bg-[#392B3C] group-hover:text-white">
-                        <Arrow diagonal />
-                      </span>
-                    </div>
-
-                    <h3 className="mt-4 line-clamp-2 text-sm font-semibold text-[#3B2D3C] sm:text-base">
-                      {product.name}
-                    </h3>
-
-                    <p className="mt-2 text-sm font-semibold text-[#A56D7A]">
-                      {formatPrice(product.price)}
-                    </p>
-                  </Link>
-                ))}
+                <Link
+                  href="/shop"
+                  className="group inline-flex items-center gap-3 border-b border-[#AF7891] pb-2 text-sm font-bold text-[#614259] transition-all duration-300 hover:gap-5 hover:text-[#A66A85]"
+                >
+                  View All Products
+                  <Arrow />
+                </Link>
               </div>
-            </div>
-          </section>
-        )}
+            )}
+          </div>
+        </section>
 
         {/* STORY AND COLORED CARDS */}
         <section
@@ -771,25 +945,35 @@ export default function HomePage() {
                 <div className="pointer-events-none absolute -right-14 -top-14 h-40 w-40 rounded-full border-[24px] border-white/30 transition-transform duration-700 group-hover:scale-125" />
 
                 <div className="relative flex items-start justify-between">
-                  <span className={`flex h-12 w-12 items-center justify-center rounded-2xl text-2xl transition-all duration-500 group-hover:scale-110 group-hover:-rotate-12 ${card.icon}`}>
+                  <span
+                    className={`flex h-12 w-12 items-center justify-center rounded-2xl text-2xl transition-all duration-500 group-hover:scale-110 group-hover:-rotate-12 ${card.icon}`}
+                  >
                     {card.symbol}
                   </span>
 
-                  <span className={`text-xs font-bold tracking-widest ${card.color}`}>
+                  <span
+                    className={`text-xs font-bold tracking-widest ${card.color}`}
+                  >
                     {card.number}
                   </span>
                 </div>
 
                 <div className="relative mt-8">
-                  <h3 className={`font-serif text-2xl font-semibold ${card.color}`}>
+                  <h3
+                    className={`font-serif text-2xl font-semibold ${card.color}`}
+                  >
                     {card.title}
                   </h3>
 
-                  <p className={`mt-2 text-sm leading-6 opacity-80 ${card.color}`}>
+                  <p
+                    className={`mt-2 text-sm leading-6 opacity-80 ${card.color}`}
+                  >
                     {card.description}
                   </p>
 
-                  <span className={`mt-4 inline-flex items-center gap-2 text-xs font-bold ${card.color}`}>
+                  <span
+                    className={`mt-4 inline-flex items-center gap-2 text-xs font-bold ${card.color}`}
+                  >
                     Discover more
                     <span className="transition-transform group-hover:translate-x-1 group-hover:-translate-y-1">
                       <Arrow diagonal />
@@ -801,14 +985,12 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* OWNER EMAIL + FACEBOOK + INSTAGRAM + DEVELOPER */}
+        {/* CONTACT, SOCIAL LINKS AND DEVELOPER */}
         <section
           id="contact"
           className="scroll-mt-32 border-t border-[#EEE5E0] bg-[#F3EFEB] px-5 py-20 sm:px-8 lg:px-12 lg:py-28"
         >
           <div className="mx-auto max-w-5xl">
-
-            {/* SECTION HEADING */}
             <div className="mb-10 text-center">
               <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-[#AC7783]">
                 CONNECT WITH US
@@ -825,10 +1007,8 @@ export default function HomePage() {
             </div>
 
             <div className="overflow-hidden rounded-[30px] border border-[#E8D9D8] bg-white shadow-[0_24px_70px_rgba(58,39,54,0.08)]">
-
               {/* OWNER CONTACT */}
               <div className="p-6 sm:p-10">
-
                 <div className="flex flex-wrap items-center gap-4">
                   <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#F4E7EC] text-[#9D617B]">
                     <SocialIcon type="whatsapp" />
@@ -847,7 +1027,6 @@ export default function HomePage() {
 
                 {/* PHONE AND EMAIL */}
                 <div className="mt-8 grid gap-4 md:grid-cols-2">
-
                   <a
                     href={CONTACT.phoneLink}
                     className="group rounded-2xl border border-[#E9DFE1] bg-[#FCF8F9] p-5 transition-all duration-300 hover:-translate-y-1 hover:border-[#D4AFBD] hover:shadow-lg"
@@ -890,8 +1069,6 @@ export default function HomePage() {
                   </p>
 
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
-
-                    {/* FACEBOOK */}
                     <a
                       href={CONTACT.facebook}
                       target="_blank"
@@ -915,7 +1092,6 @@ export default function HomePage() {
                       <Arrow diagonal />
                     </a>
 
-                    {/* INSTAGRAM */}
                     <a
                       href={CONTACT.instagram}
                       target="_blank"
@@ -957,9 +1133,8 @@ export default function HomePage() {
                 </a>
               </div>
 
-              {/* SEPARATE DEVELOPER CONTACT */}
+              {/* DEVELOPER CONTACT */}
               <div className="border-t border-[#EFE3E8] bg-[#FCFAFB] p-6 sm:p-10">
-
                 <div className="flex flex-wrap items-center justify-between gap-5">
                   <div>
                     <h3 className="font-serif text-2xl text-[#3B2D40]">
@@ -986,12 +1161,10 @@ export default function HomePage() {
                     </span>
                   </a>
                 </div>
-
               </div>
             </div>
           </div>
         </section>
-
       </main>
 
       <BusinessFooter />
