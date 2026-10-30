@@ -19,7 +19,47 @@ export default function SetPasswordPage() {
 
     async function checkAccess() {
       try {
+        // Dashboard invitations normally redirect with implicit-flow
+        // tokens in the URL fragment. @supabase/ssr uses PKCE, so we
+        // explicitly exchange those tokens for a cookie-backed session.
+        const fragment = new URLSearchParams(
+          window.location.hash.replace(/^#/, "")
+        );
+        const accessToken = fragment.get("access_token");
+        const refreshToken = fragment.get("refresh_token");
+        const invitationError = fragment.get("error");
+
+        if (invitationError) {
+          throw new Error(
+            "This invitation link is invalid or expired. Please request a new invitation."
+          );
+        }
+
         const supabase = createClient();
+
+        if (accessToken || refreshToken) {
+          if (!accessToken || !refreshToken) {
+            throw new Error("This invitation link is incomplete.");
+          }
+
+          const { error: sessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+
+          if (sessionError) {
+            throw new Error(
+              "This invitation could not be verified. Please request a new link."
+            );
+          }
+
+          // Remove credentials from the visible URL and browser history.
+          window.history.replaceState(
+            window.history.state,
+            "",
+            window.location.pathname + window.location.search
+          );
+        }
 
         const {
           data: { user },
@@ -43,15 +83,19 @@ export default function SetPasswordPage() {
           !admin ||
           !["owner", "manager"].includes(admin.role)
         ) {
-          throw new Error(
-            "This account is not authorized for admin access."
-          );
+          throw new Error("This account is not authorized for admin access.");
         }
 
-        if (active) {
-          setAuthorized(true);
-        }
+        if (active) setAuthorized(true);
       } catch (err) {
+        // Do not leave invitation credentials in the address bar on failure.
+        if (window.location.hash) {
+          window.history.replaceState(
+            window.history.state,
+            "",
+            window.location.pathname + window.location.search
+          );
+        }
         if (active) {
           setError(
             err instanceof Error
@@ -60,9 +104,7 @@ export default function SetPasswordPage() {
           );
         }
       } finally {
-        if (active) {
-          setChecking(false);
-        }
+        if (active) setChecking(false);
       }
     }
 
@@ -75,7 +117,6 @@ export default function SetPasswordPage() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
     if (loading || !authorized || success) return;
 
     setError("");
@@ -94,7 +135,6 @@ export default function SetPasswordPage() {
 
     try {
       const supabase = createClient();
-
       const {
         data: { user },
         error: userError,
@@ -120,20 +160,19 @@ export default function SetPasswordPage() {
         throw new Error("Admin access verification failed.");
       }
 
-      const { error: updateError } =
-        await supabase.auth.updateUser({
-          password,
-        });
+      const { error: updateError } = await supabase.auth.updateUser({
+        password,
+      });
 
-      if (updateError) {
-        throw new Error(updateError.message);
-      }
+      if (updateError) throw new Error(updateError.message);
 
       setPassword("");
       setConfirmPassword("");
       setSuccess(true);
 
-      await supabase.auth.signOut();
+      // Keep the new owner's verified session; do not sign them out.
+      // A full navigation ensures the admin proxy reads fresh auth cookies.
+      window.location.replace("/admin");
     } catch (err) {
       setError(
         err instanceof Error
@@ -155,7 +194,6 @@ export default function SetPasswordPage() {
               <span className="text-[#b77b5b]">Meherin</span>
             </h1>
           </Link>
-
           <p className="mt-3 text-xs uppercase tracking-[0.25em] text-[#a57964]">
             Business Management System
           </p>
@@ -166,14 +204,12 @@ export default function SetPasswordPage() {
             <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-[#f4e4dc] text-3xl text-[#b77b5b]">
               ✿
             </div>
-
             <h2 className="font-serif text-3xl">
               {success ? "Password Updated" : "Set Your Password"}
             </h2>
-
             <p className="mt-3 text-sm text-[#80685b]">
               {success
-                ? "Your password has been saved successfully."
+                ? "Opening your admin dashboard..."
                 : "Create a secure password for your admin account."}
             </p>
           </div>
@@ -202,7 +238,6 @@ export default function SetPasswordPage() {
                 >
                   New Password
                 </label>
-
                 <input
                   id="new-password"
                   type={showPassword ? "text" : "password"}
@@ -215,7 +250,6 @@ export default function SetPasswordPage() {
                   className="w-full rounded-xl border border-[#e6d6cc] px-4 py-3 outline-none focus:border-[#b77b5b] focus:ring-2 focus:ring-[#b77b5b]/20"
                 />
               </div>
-
               <div>
                 <label
                   htmlFor="confirm-password"
@@ -223,7 +257,6 @@ export default function SetPasswordPage() {
                 >
                   Confirm Password
                 </label>
-
                 <input
                   id="confirm-password"
                   type={showPassword ? "text" : "password"}
@@ -231,25 +264,19 @@ export default function SetPasswordPage() {
                   required
                   minLength={12}
                   value={confirmPassword}
-                  onChange={(event) =>
-                    setConfirmPassword(event.target.value)
-                  }
+                  onChange={(event) => setConfirmPassword(event.target.value)}
                   placeholder="Confirm your password"
                   className="w-full rounded-xl border border-[#e6d6cc] px-4 py-3 outline-none focus:border-[#b77b5b] focus:ring-2 focus:ring-[#b77b5b]/20"
                 />
               </div>
-
               <label className="flex items-center gap-2 text-sm text-[#80685b]">
                 <input
                   type="checkbox"
                   checked={showPassword}
-                  onChange={(event) =>
-                    setShowPassword(event.target.checked)
-                  }
+                  onChange={(event) => setShowPassword(event.target.checked)}
                 />
                 Show passwords
               </label>
-
               <button
                 type="submit"
                 disabled={loading}
@@ -262,10 +289,10 @@ export default function SetPasswordPage() {
 
           {success && (
             <Link
-              href="/admin-login"
+              href="/admin"
               className="block rounded-full bg-[#693f31] px-6 py-4 text-center font-semibold text-white hover:bg-[#875441]"
             >
-              Go to Admin Login
+              Open Admin Dashboard
             </Link>
           )}
 
