@@ -282,7 +282,7 @@ export default function AdminSettingsPage() {
       <aside className="w-full shrink-0 border-b border-[#eaded5] bg-white lg:min-h-screen lg:w-64 lg:border-b-0 lg:border-r">
         <div className="border-b border-[#eaded5] p-6">
           <Link href="/admin" className="text-xl font-bold tracking-wide">
-            HENNA <span className="text-[#b77b5b]">STUDIO</span>
+            Mehedi <span className="text-[#b77b5b]">By Meherin</span>
           </Link>
           <p className="mt-2 text-xs text-[#80685b]">Business Management</p>
         </div>

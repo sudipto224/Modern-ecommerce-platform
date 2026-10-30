@@ -536,10 +536,7 @@ function AdminOrdersContent() {
             href="/admin"
             className="text-lg font-bold tracking-wide"
           >
-            HENNA{" "}
-            <span className="text-[#b77b5b]">
-              STUDIO
-            </span>
+            Mehedi <span className="text-[#b77b5b]">By Meherin</span>
           </Link>
 
           <p className="mt-2 text-xs text-[#9b6d57]">
